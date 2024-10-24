@@ -3,10 +3,6 @@
 {% block title %} Радиоактивные элементы {% endblock %}
 
 {% block container %}
-    <!--<form action="{% url 'home' %}" class="sForm space centerFlex" method="get">
-        <input class="text" name="PlanetName" type="text" placeholder="Поиск планеты" value="{{ data.searchText }}">
-        <input class="submit" type="submit" value="Найти" >
-    </form>-->
     <div class = "searchSpace">
         <form action="{% url 'home' %}" class="searchContainer" method="get">
             <input class="searchBar" name="atomic_mass" type="text" pattern="\d*" placeholder="Поиск по атомной массе" value="{{ data.searchText }}">
