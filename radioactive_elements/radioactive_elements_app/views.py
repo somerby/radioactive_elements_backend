@@ -1,4 +1,5 @@
 from django.shortcuts import render
+from .models import Element, Decay, Element_Decay
 
 data = {'elements': [
             {'id': 1,
@@ -276,13 +277,10 @@ def basketCircleController(id):
             return len(decay['elements'])
 
 def getServices(request):
-    data['searchResult'].clear()
-    data['searchNum'] = request.GET.get('atomic_mass', '')
-    for element in data['elements']:
-        if data['searchNum'] in element['atomic_mass']:
-            data['searchResult'].append(element)
+    searchNum = request.GET.get('atomic_mass', '')
+    elements = Element.objects.filter(atomic_mass__contains=searchNum)
 
-    return render(request, 'services.html', {'elements': data['searchResult'], 'basketCount': basketCircleController(data['decayId']), 'decayId': data['decayId']})
+    return render(request, 'services.html', {'searchNum': searchNum, 'elements': elements, 'decayCount': 5, 'decayID': 3})
 
 def getDecay(request, id):
     return render(request, 'decay.html', {'decayId': id, 'elements': getElementsFromDecayId(id), 'pass_time': getPassTimeFromDecayId(id)})

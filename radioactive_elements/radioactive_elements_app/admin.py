@@ -1,3 +1,6 @@
 from django.contrib import admin
+from .models import Element, Decay, Element_Decay
 
-# Register your models here.
+admin.site.register(Element)
+admin.site.register(Decay)
+admin.site.register(Element_Decay)

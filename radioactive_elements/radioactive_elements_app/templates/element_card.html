@@ -1,10 +1,10 @@
 <div class = "card cardElements">
-    <img src="{{element.img}}" alt="cardLogo" class="cardLogo" style = "margin-bottom: 9rem;">
+    <img src="{{element.img_url}}" alt="cardLogo" class="cardLogo" style = "margin-bottom: 9rem;">
     <div class = "cardName">
       <h2 class = "oswaldH">{{element.name}}</h2>
     </div>
     <div class = "cardAbout">
-      <p class = "georgiaP">{{element.period|safe}}</p>
+      <p class = "georgiaP">{{element.pass_time|safe}}</p>
     </div>
-    <a href = "{% url 'ElementID' element.id %}" class = "button cardButton oswaldH">Подробнее</a>
+    <a href = "{% url 'ElementID' element.element_id %}" class = "button cardButton oswaldH">Подробнее</a>
 </div>
