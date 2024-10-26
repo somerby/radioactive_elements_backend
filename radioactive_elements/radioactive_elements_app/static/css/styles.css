@@ -306,3 +306,28 @@ html {
     margin: 0;
     width: 387rem;
 }
+
+#deleteButton {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #cd0000;
+    border: 0;
+    text-decoration: none;
+    width: 288rem;
+    height: 51rem;
+    color: #B9CDFB;
+    font-size: 32rem;
+    letter-spacing: 1rem;
+    position: absolute;
+    right: 25rem;
+    top: 25rem
+}
+    
+#deleteButton:hover {
+    background-color: #cd0000;
+}
+
+#deleteButton:active {
+    background-color: #940000;
+}

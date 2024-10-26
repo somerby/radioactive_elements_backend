@@ -5,15 +5,17 @@
 {% block container %}
     <div class = "searchSpace">
         <form action="{% url 'home' %}" class="searchContainer" method="get">
-            <input class="searchBar" name="atomic_mass" type="text" pattern="\d*" placeholder="Поиск по атомной массе" value="{{ searchNum }}">
+            <input class="searchBar" name="atomic_mass" type="text" pattern="\d*" placeholder="Поиск по атомной массе" value="{{ search_number }}">
             <input class="searchButton" type="submit" value="Найти" >
         </form>
-        {% if decayCount > 0 %}
-            <div class = "circle oswaldH">{{decayCount}}</div>
+        {% if decay_information.decay_id != 0 %}
+            <a href="{% url 'decay' decay_information.decay_id %}">
+                <img src="http://127.0.0.1:9000/images/icons/quote.jpg" alt = "decay" class = "decayLogo">
+            </a>
+        {% if decay_information.decay_elements_count > 0 %}
+            <div class = "circle oswaldH">{{decay_information.decay_elements_count}}</div>
         {% endif %}
-        <a href="{% url 'decay' decayID %}">
-            <img src="http://127.0.0.1:9000/images/icons/quote.jpg" alt = "decay" class = "decayLogo">
-        </a>
+        {% endif %}
     </div>
     <div class = "elementsContainer">
         {% for element in elements %}

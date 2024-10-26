@@ -4,7 +4,12 @@
       <h2 class = "oswaldH">{{element.name}}</h2>
     </div>
     <div class = "cardAbout">
-      <p class = "georgiaP">{{element.pass_time|safe}}</p>
+      <p class = "georgiaP">{{element.period_time_text|safe}}</p>
     </div>
+    <form action="{% url 'add_element_to_decay' %}" method="post">
+      {% csrf_token %}
+      <input type="hidden" name="element_id" value="{{ element.element_id }}">
+      <button class = "button cardButton oswaldH" style="margin-bottom: 9rem; cursor: pointer;">Добавить</button>
+    </form>
     <a href = "{% url 'ElementID' element.element_id %}" class = "button cardButton oswaldH">Подробнее</a>
 </div>

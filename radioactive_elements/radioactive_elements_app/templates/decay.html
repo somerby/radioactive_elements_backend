@@ -3,22 +3,31 @@
 {% block title %} Распад {% endblock %}
 
 {% block container %}
+<form action="{% url 'delete_decay' %}" method="post">
+    {% csrf_token %}
+    <input type="hidden" name="decay_id" value="{{ decay_id }}">
+    <button class = 'oswaldH' id = "deleteButton" style="cursor: pointer;">Удалить</button>
+</form>
+{% if permission == 1 %}
 <div class="decayPassTime">
     <p class = "georgiaP">Прошло времени: </p>
-    <input type="text" class="decayInput" name="decay_elements_pass_time" value="{{pass_time}}">
+    <input type="text" class="decayInput" name="decay_elements_pass_time" value="{{pass_time|default:''}}">
 </div>
 <div class = "decayElementsContainer">
     {% for element in elements %}
     <div class = "decayCard card">
-        <img src="{{element.img}}" alt = "decayCardLogo" class = "decayCardLogo">
+        <img src="{{element.element_id.img_url}}" alt = "decayCardLogo" class = "decayCardLogo">
         <div class = "decayCardContent">
-            <h2 class = "oswaldH">{{element.name}}</h2>
+            <h2 class = "oswaldH">{{element.element_id.name}}</h2>
             <div class = "decayCardInput">
                 <p class = "georgiaP">Количество вещества: </p>
-                <input type="text" class="decayInput" name="decay_element_mass_input" value="{{element.quantity}}">
+                <input type="text" class="decayInput" name="decay_element_mass_input" value="{{element.quantity|default:''}}">
             </div>
         </div>
     </div>
     {% endfor %}
 </div>
+{% else %}
+<h1 class="oswaldH" style = "font-size: 96rem;">Нет доступа к просмотру</h1>
+{% endif %}
 {% endblock %}

@@ -21,6 +21,8 @@ from radioactive_elements_app import views
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', views.getServices, name = 'home'),
-    path('element/<int:id>/', views.getService, name = 'ElementID'),
-    path('decay/<int:id>/', views.getDecay, name = 'decay'),
+    path('element/<int:element_id>/', views.getService, name = 'ElementID'),
+    path('decay/<int:decay_id>/', views.getDecay, name = 'decay'),
+    path('add_element_to_decay/', views.addElementToDecay, name = 'add_element_to_decay'),
+    path('delete_decay/', views.deleteDecay, name = 'delete_decay')
 ]
