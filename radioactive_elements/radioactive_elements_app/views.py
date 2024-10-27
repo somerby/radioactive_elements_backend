@@ -22,8 +22,8 @@ def addElementToDecay(request):
             decay_id = decay.decay_id
         try:
             new_element_decay = Element_Decay(
-                decay_id = Decay.objects.get(decay_id=decay_id),
-                element_id = Element.objects.get(element_id=element_id),
+                decay = Decay.objects.get(decay_id=decay_id),
+                element = Element.objects.get(element_id=element_id),
             )
             new_element_decay.save()
         except IntegrityError:
@@ -34,7 +34,7 @@ def addElementToDecay(request):
 def deleteDecay(request):
     decay_id = request.POST.get('decay_id')
     with connection.cursor() as cursor:
-        cursor.execute("UPDATE radioactive_elements_app_decay SET status = 'удален' WHERE decay_id = %s", decay_id)
+        cursor.execute("UPDATE radioactive_elements_app_decay SET status = 'deleted' WHERE decay_id = %s", decay_id)
     return redirect('home')
 
 def getDecayInformation(user_id):
@@ -66,19 +66,19 @@ def getServices(request):
 def getDecay(request, decay_id):
     decay = Decay.objects.filter(decay_id=decay_id).first()
     if decay is None:
-        elements = {}
+        decay_elements = {}
         pass_time = ''
         permission = 0
     elif decay.status == 'draft': 
-        elements = Element_Decay.objects.filter(decay_id=decay_id).select_related('element_id')
+        decay_elements = Element_Decay.objects.filter(decay_id=decay_id).select_related('element')
         pass_time = decay.pass_time
         permission = 1
     else:
-        elements = {}
+        decay_elements = {}
         pass_time = ''
         permission = 0
 
     return render(request, 'decay.html', {'decay_id': decay_id,
-                                          'elements': elements, 
+                                          'decay_elements': decay_elements, 
                                           'pass_time': pass_time,
                                           'permission': permission})

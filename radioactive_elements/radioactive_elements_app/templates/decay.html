@@ -14,14 +14,14 @@
     <input type="text" class="decayInput" name="decay_elements_pass_time" value="{{pass_time|default:''}}">
 </div>
 <div class = "decayElementsContainer">
-    {% for element in elements %}
+    {% for decay_element in decay_elements %}
     <div class = "decayCard card">
-        <img src="{{element.element_id.img_url}}" alt = "decayCardLogo" class = "decayCardLogo">
+        <img src="{{decay_element.element.img_url}}" alt = "decayCardLogo" class = "decayCardLogo">
         <div class = "decayCardContent">
-            <h2 class = "oswaldH">{{element.element_id.name}}</h2>
+            <h2 class = "oswaldH">{{decay_element.element.name}}</h2>
             <div class = "decayCardInput">
                 <p class = "georgiaP">Количество вещества: </p>
-                <input type="text" class="decayInput" name="decay_element_mass_input" value="{{element.quantity|default:''}}">
+                <input type="text" class="decayInput" name="decay_element_mass_input" value="{{decay_element.quantity|default:''}}">
             </div>
         </div>
     </div>

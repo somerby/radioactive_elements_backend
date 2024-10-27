@@ -30,8 +30,8 @@ class Decay(models.Model):
     remaining_quantity = models.CharField(max_length=40, null=True, blank=True)
 
 class Element_Decay(models.Model):
-    element_id = models.ForeignKey(Element, on_delete=models.DO_NOTHING, related_name='element_decays')
-    decay_id = models.ForeignKey(Decay, on_delete=models.DO_NOTHING, related_name='decay_elements')
+    element = models.ForeignKey(Element, on_delete=models.DO_NOTHING, related_name='element_decays')
+    decay = models.ForeignKey(Decay, on_delete=models.DO_NOTHING, related_name='decay_elements')
     quantity = models.CharField(max_length=30, null=True, blank=True)
     class Meta:
-        unique_together = ('element_id', 'decay_id')
+        unique_together = ('element', 'decay')
