@@ -3,12 +3,12 @@
 {% block title %} Распад {% endblock %}
 
 {% block container %}
+{% if permission == 1 %}
 <form action="{% url 'delete_decay' %}" method="post">
     {% csrf_token %}
     <input type="hidden" name="decay_id" value="{{ decay_id }}">
     <button class = 'oswaldH' id = "deleteButton" style="cursor: pointer;">Удалить</button>
 </form>
-{% if permission == 1 %}
 <div class="decayPassTime">
     <p class = "georgiaP">Прошло времени: </p>
     <input type="text" class="decayInput" name="decay_elements_pass_time" value="{{pass_time|default:''}}">
@@ -28,6 +28,6 @@
     {% endfor %}
 </div>
 {% else %}
-<h1 class="oswaldH" style = "font-size: 96rem;">Нет доступа к просмотру</h1>
+<h1 class="oswaldH" style = "font-size: 96rem; text-align: center;">Нет доступа к просмотру</h1>
 {% endif %}
 {% endblock %}
