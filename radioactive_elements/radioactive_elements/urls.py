@@ -20,9 +20,20 @@ from radioactive_elements_app import views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', views.getServices, name = 'home'),
-    path('element/<int:element_id>/', views.getService, name = 'ElementID'),
-    path('decay/<int:decay_id>/', views.getDecay, name = 'decay'),
-    path('add_element_to_decay/', views.addElementToDecay, name = 'add_element_to_decay'),
-    path('delete_decay/', views.deleteDecay, name = 'delete_decay')
+
+    path('api/elements', views.elementsMethods.as_view(), name = 'elements'),
+    path('api/elements/<int:element_id>', views.elementMethods.as_view(), name = 'element'),
+    path('api/elements/<int:element_id>/add_img', views.elementAddImg, name = 'elementAddImg'),
+
+    path('api/decays', views.decaysMethods.as_view(), name = 'decays'),
+    path('api/decay/<int:decay_id>', views.decayMethods.as_view(), name = 'decay'),
+    path('api/decay/<int:decay_id>/forming', views.formingDecay.as_view(), name = 'decayForm'),
+    path('api/decay/<int:decay_id>/moderate', views.moderateDecay.as_view(), name = 'decayForm'),
+
+    path('api/element_decay/<int:element_id>/<int:decay_id>', views.elementDecayMethods.as_view(), name='element_decay'),
+
+    path('api/user/registration', views.userRegistration, name='userRegistration'),
+    path('api/user/account/<str:username>', views.userAccount, name='userAccount'),
+    path('api/user/authentication', views.userAuthentication, name='userAuthentication'),
+    path('api/user/deauthentication', views.userDeauthentication, name='userDauthentication')
 ]
