@@ -1,24 +1,41 @@
 from django.db import models
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, UserManager
+from django.contrib.auth.models import Group, Permission
 
-class AuthUser(models.Model):
-    password = models.CharField(max_length=128)
-    last_login = models.DateTimeField(blank=True, null=True)
-    is_superuser = models.BooleanField()
-    username = models.CharField(unique=True, max_length=150)
-    first_name = models.CharField(max_length=150)
-    last_name = models.CharField(max_length=150)
-    email = models.CharField(max_length=254)
-    is_staff = models.BooleanField()
-    is_active = models.BooleanField(default=True)
-    date_joined = models.DateTimeField(auto_now_add=True)
+class NewUserManager(UserManager):
+    def create_user(self,email,password=None, **extra_fields):
+        if not email:
+            raise ValueError('User must have an email address')
+        
+        email = self.normalize_email(email) 
+        user = self.model(email=email, **extra_fields) 
+        user.set_password(password)
+        user.save(using=self.db)
+        return user
 
-    def __str__(self):
-        return f'{self.username}'
+class CustomUser(AbstractBaseUser, PermissionsMixin):
+    email = models.EmailField(("email адрес"), unique=True)
+    password = models.CharField(max_length=50, verbose_name="Пароль")    
+    is_staff = models.BooleanField(default=False, verbose_name="Является ли пользователь менеджером?")
+    is_superuser = models.BooleanField(default=False, verbose_name="Является ли пользователь админом?")
 
-    class Meta:
-        managed = False
-        db_table = 'auth_user'
+    USERNAME_FIELD = 'email'
+
+    objects =  NewUserManager()
+    groups = models.ManyToManyField(
+        Group,
+        related_name='customuser_groups',  # Unique related_name to avoid clashes
+        blank=True,
+        verbose_name='Группы'
+    )
+
+    user_permissions = models.ManyToManyField(
+        Permission,
+        related_name='customuser_permissions',  # Unique related_name to avoid clashes
+        blank=True,
+        verbose_name='Разрешения'
+    )
 
 class Element(models.Model):
     status_choices = [
