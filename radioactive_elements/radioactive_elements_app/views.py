@@ -16,6 +16,10 @@ import re
 import math
 
 UNIT_CONVERSIONS = {
+            'т': 1000000,
+            'тонна': 1000000,
+            'тонны': 1000000,
+            'тонн': 1000000,
             'кг': 1000,
             'килограмм': 1000,
             'килограммов': 1000,
@@ -62,6 +66,14 @@ UNIT_CONVERSIONS = {
             'лет': 31536000,
         }
 
+MASS_UNIT_CONVERSIONS = {
+            1000000: 'т',
+            1000: 'кг',
+            1: 'г',
+            0.001: 'мг',
+            0.000001: 'мкг',
+}
+
 def getDecayInformation(user):
     decay = user.user_decays.all().filter(status='draft').first()
     if decay is None:
@@ -93,7 +105,10 @@ def half_life_calculation(pass_time_text, quantity_text, period_time):
     quantity = unit_parse(quantity_text)
     lambda_decay = math.log(2) / period_time
     remaining_mass = quantity * math.exp(-lambda_decay * pass_time)
-    return remaining_mass
+    for unit_mass in MASS_UNIT_CONVERSIONS:
+        if remaining_mass > unit_mass:
+            return str(remaining_mass / unit_mass) + ' ' + MASS_UNIT_CONVERSIONS[unit_mass]
+    return str(remaining_mass) + ' г'
 
 class elementsMethods(APIView):
     serializer = ElementSerializer
@@ -271,7 +286,7 @@ class moderateDecay(APIView):
                     elements = decay.decay_elements.all()
                     for element in elements:
                         try:
-                            element.remaining_quantity = str(half_life_calculation(decay.pass_time, element.quantity, element.element.period_time)) + ' грамм'
+                            element.remaining_quantity = half_life_calculation(decay.pass_time, element.quantity, element.element.period_time)
                         except NameError:
                             element.remaining_quantity = 'Неверный формат входных данных'
                         except ValueError:
@@ -285,7 +300,7 @@ class moderateDecay(APIView):
                 else:
                     return Response({'action': 'Неверное действие'}, status=status.HTTP_400_BAD_REQUEST)
             else:
-                return Response({'status': 'Заявка - не сформирована'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'status': 'Заявка не сформирована'}, status=status.HTTP_400_BAD_REQUEST)
         else:
             return Response({'user': 'Нет доступа!'}, status=status.HTTP_400_BAD_REQUEST)
 

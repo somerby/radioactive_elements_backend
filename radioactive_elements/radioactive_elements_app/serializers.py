@@ -12,8 +12,14 @@ class ElementSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['element_id', 'status']
 
+class ElementForDecaySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Element
+        fields = ['element_id', 'name', 'status', 'img_url']
+        read_only_fields = ['element_id', 'status']
+
 class ElementDecaySerializer(serializers.ModelSerializer):
-    element = ElementSerializer(read_only=True)
+    element = ElementForDecaySerializer(read_only=True)
 
     class Meta:
         model = Element_Decay
