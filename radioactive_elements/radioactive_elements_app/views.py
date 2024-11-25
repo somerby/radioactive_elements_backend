@@ -257,8 +257,8 @@ class decayMethods(APIView):
 
     @method_permission_classes([IsAuth])
     def get(self, request):
-        decay = get_object_or_404(Decay, creator = request.user, status = 'draft')
-        return Response(self.serializer(decay).data, status=status.HTTP_200_OK)
+        decays = Decay.objects.filter(creator = request.user)
+        return Response(self.serializer(decays, many = True).data, status=status.HTTP_200_OK)
     
     @method_permission_classes([IsAuth])
     @swagger_auto_schema(request_body=serializer)
