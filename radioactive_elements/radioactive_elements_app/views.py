@@ -1,82 +1,68 @@
 from django.shortcuts import get_object_or_404
 from django.utils.dateparse import parse_date
 from django.utils import timezone
-from django.contrib.auth import get_user_model
+from django.contrib.auth import authenticate, logout
+from django.views.decorators.csrf import csrf_exempt
+from django.conf import settings
 
 from .models import *
 from .serializers import *
 from .minio import deleteImg, addImg
+from .hl_calc import HalfLifeCalculation
+from .permissions import IsManager, IsAdmin, AuthBySSID, IsAuth
+from .redis import session_storage
 
 from rest_framework import status
 from rest_framework import viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.decorators import api_view
-
-import re
-import math
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.permissions import AllowAny
 
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 
-UNIT_CONVERSIONS = {
-            'т': 1000000,
-            'тонна': 1000000,
-            'тонны': 1000000,
-            'тонн': 1000000,
-            'кг': 1000,
-            'килограмм': 1000,
-            'килограммов': 1000,
-            'г': 1,
-            'грамм': 1,
-            'граммов': 1,
-            'мг': 0.001,
-            'миллиграмм': 0.001,
-            'миллиграммов': 0.001,
-            'мкг': 0.000001,
-            'микрограмм': 0.000001,
-            'микрограммов': 0.000001,
-            'мкс': 0.000001,
-            'микросекунд': 0.000001,
-            'микросекунда': 0.000001,
-            'мс': 0.000001,
-            'миллисекунд': 0.000001,
-            'миллисекунда': 0.000001,
-            'с': 0.000001,
-            'секунд': 0.000001,
-            'секунда': 0.000001,
-            'м': 60,
-            'минут': 60,
-            'минута': 60,
-            'ч': 3600,
-            'час': 3600,
-            'часа': 3600,
-            'часов': 3600,
-            'д': 86400,
-            'день': 86400,
-            'дней': 86400,
-            'дня': 86400,
-            'н': 604800,
-            'неделя': 604800,
-            'недели': 604800,
-            'недель': 604800,
-            'мес': 2678400,
-            'месяц': 2678400,
-            'месяца': 2678400,
-            'месяцев': 2678400,
-            'г': 31536000,
-            'год': 31536000,
-            'года': 31536000,
-            'лет': 31536000,
-        }
+import uuid
 
-MASS_UNIT_CONVERSIONS = {
-            1000000: 'т',
-            1000: 'кг',
-            1: 'г',
-            0.001: 'мг',
-            0.000001: 'мкг',
-}
+def method_permission_classes(classes):
+    def decorator(func):
+        def decorated_func(self, *args, **kwargs):
+            self.permission_classes = classes        
+            self.check_permissions(self.request)
+            return func(self, *args, **kwargs)
+        return decorated_func
+    return decorator
+
+@csrf_exempt
+@swagger_auto_schema(method='post', request_body=SwaggerCustomUserSerializer)
+@api_view(['post'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def login_view(request):
+    username = request.data["email"] 
+    password = request.data["password"]
+    user = authenticate(request, email=username, password=password)
+    if user is not None:
+        random_key = str(uuid.uuid4())
+        session_storage.set(random_key, username)
+
+        response = Response({'status': 'ok'}, status=status.HTTP_200_OK)
+        response.set_cookie("session_id", random_key)
+
+        return response
+    else:
+        return Response({'status': 'error', 'error': 'login failed'}, status=status.HTTP_403_FORBIDDEN)
+
+@csrf_exempt
+@swagger_auto_schema(method='post')
+@api_view(['post'])
+@authentication_classes([AuthBySSID])
+@permission_classes([IsAuth])
+def logout_view(request):
+    ssid = request.COOKIES.get("session_id")
+    session_storage.delete(ssid)
+    logout(request)
+    return Response({'status': 'logged out'}, status=status.HTTP_200_OK)
 
 def getDecayInformation(user):
     decay = user.user_decays.all().filter(status='draft').first()
@@ -90,33 +76,11 @@ def getDecayInformation(user):
     return {'decay_elements_count': decay_elements_count, 
             'decay_id': decay_id}
 
-def curr_user():
-    return get_user_model().objects.get(id = 1)
-
-def unit_parse(text):
-    match = re.match(r'(\d+[.,]?\d*)\s*(\D+)', text)
-    if not match:
-        raise NameError()
-    value = float(match.group(1).replace(',', '.'))
-    unit = match.group(2).strip().lower()
-    if unit in UNIT_CONVERSIONS:
-        return value * UNIT_CONVERSIONS[unit]
-    else:
-        raise ValueError()
-
-def half_life_calculation(pass_time_text, quantity_text, period_time):
-    pass_time = unit_parse(pass_time_text)
-    quantity = unit_parse(quantity_text)
-    lambda_decay = math.log(2) / period_time
-    remaining_mass = quantity * math.exp(-lambda_decay * pass_time)
-    for unit_mass in MASS_UNIT_CONVERSIONS:
-        if remaining_mass > unit_mass:
-            return str(remaining_mass / unit_mass) + ' ' + MASS_UNIT_CONVERSIONS[unit_mass]
-    return str(remaining_mass) + ' г'
-
 class elementsMethods(APIView):
     serializer = ElementSerializer
+    authentication_classes = [AuthBySSID]
 
+    @method_permission_classes([AllowAny])
     @swagger_auto_schema(manual_parameters=[
         openapi.Parameter(
             'atomic_mass',
@@ -128,13 +92,18 @@ class elementsMethods(APIView):
     def get(self, request):
         search_number = request.query_params.get('atomic_mass', '')
         elements = Element.objects.filter(atomic_mass__contains=search_number)
-        decay_information = getDecayInformation(curr_user())
+        if request.user.is_authenticated:
+            decay_information = getDecayInformation(request.user)
+        else:
+            decay_information = {'decay_elements_count': 0, 
+                                 'decay_id': 0}
         serial_data = self.serializer(elements, many = True)
         return Response({'search_number': search_number, 
                          'elements': serial_data.data, 
                          'decay_information': decay_information},
                          status=status.HTTP_200_OK)
     
+    @method_permission_classes([IsAuth])
     @swagger_auto_schema(request_body=serializer)
     def post(self, request):
         input_data = self.serializer(data=request.data)
@@ -145,15 +114,19 @@ class elementsMethods(APIView):
 
 class elementMethods(APIView):
     serializer = ElementSerializer
+    authentication_classes = [AuthBySSID]
 
+    @method_permission_classes([AllowAny])
+    @swagger_auto_schema()
     def get(self, request, element_id):
         element = get_object_or_404(Element, pk=element_id)
         return Response(self.serializer(element).data, status=status.HTTP_200_OK)
     
+    @method_permission_classes([IsAuth])
     @swagger_auto_schema(request_body=serializer)
     def post(self, request, element_id):
         decay, is_created = Decay.objects.get_or_create(
-            creator = curr_user(),
+            creator = request.user,
             status = 'draft',
         )
         if Element_Decay.objects.filter(element=element_id, decay=decay.decay_id).exists():
@@ -164,7 +137,8 @@ class elementMethods(APIView):
                 element = Element.objects.get(element_id=element_id)
             )
             return Response(status=status.HTTP_200_OK)
-        
+    
+    @method_permission_classes([IsManager])
     @swagger_auto_schema(request_body=serializer)
     def put(self, request, element_id):
         element = get_object_or_404(Element, pk=element_id)
@@ -174,6 +148,7 @@ class elementMethods(APIView):
             return Response(changed_element.data, status=status.HTTP_200_OK)
         return Response(changed_element.errors, status=status.HTTP_400_BAD_REQUEST)
     
+    @method_permission_classes([IsManager])
     @swagger_auto_schema(request_body=serializer)
     def delete(self, request, element_id):
         element = get_object_or_404(Element, pk=element_id)
@@ -185,8 +160,10 @@ class elementMethods(APIView):
                 return Response(self.serializer(element).data, status=status.HTTP_204_NO_CONTENT)
             element.save()
             return Response({'s3_img': 'Удаление не удалось'}, status=status.HTTP_404_NOT_FOUND)
-        return Response({'element', 'Элемент уже удален'}, status=status.HTTP_208_ALREADY_REPORTED)
+        return Response({'element': 'Элемент уже удален'}, status=status.HTTP_208_ALREADY_REPORTED)
 
+@authentication_classes([AuthBySSID])
+@permission_classes([IsManager])
 @swagger_auto_schema(method='post', request_body=ElementSerializer)
 @api_view(['post'])
 def elementAddImg(request, element_id):
@@ -202,7 +179,9 @@ def elementAddImg(request, element_id):
 
 class elementDecayMethods(APIView):
     serializer = ElementDecaySerializer
+    authentication_classes = [AuthBySSID]
 
+    @method_permission_classes([IsManager])
     @swagger_auto_schema(request_body=serializer)
     def delete(self, request, element_id, decay_id):
         element_decay = get_object_or_404(Element_Decay, element=element_id, decay=decay_id)
@@ -210,6 +189,7 @@ class elementDecayMethods(APIView):
         elements_decay = Element_Decay.objects.filter(decay=decay_id)
         return Response(self.serializer(elements_decay, many=True).data, status=status.HTTP_200_OK)
     
+    @permission_classes([IsManager])
     @swagger_auto_schema(request_body=serializer)
     def put(self, request, element_id, decay_id):
         element_decay = get_object_or_404(Element_Decay, element=element_id, decay=decay_id)
@@ -222,7 +202,9 @@ class elementDecayMethods(APIView):
 
 class decaysMethods(APIView):
     serializer = DecaySerializer
+    authentication_classes = [AuthBySSID]
 
+    @method_permission_classes([IsManager])
     @swagger_auto_schema(manual_parameters=[
         openapi.Parameter(
             'start_date',
@@ -271,14 +253,17 @@ class decaysMethods(APIView):
     
 class decayMethods(APIView):
     serializer = DecaySerializer
+    authentication_classes = [AuthBySSID]
 
-    def get(self, request, decay_id):
-        decay = get_object_or_404(Decay, pk=decay_id)
+    @method_permission_classes([IsAuth])
+    def get(self, request):
+        decay = get_object_or_404(Decay, creator = request.user, status = 'draft')
         return Response(self.serializer(decay).data, status=status.HTTP_200_OK)
     
+    @method_permission_classes([IsAuth])
     @swagger_auto_schema(request_body=serializer)
-    def put(self, request, decay_id):
-        decay = get_object_or_404(Decay, pk=decay_id)
+    def put(self, request):
+        decay = get_object_or_404(Decay, creator = request.user, status = 'draft')
         changed_decay = self.serializer(decay, data=request.data, partial=True)
         if changed_decay.is_valid():
             changed_decay.save()
@@ -287,131 +272,96 @@ class decayMethods(APIView):
 
 class formingDecay(APIView):
     serializer = DecaySerializer
+    authentication_classes = [AuthBySSID]
 
+    @method_permission_classes([IsAuth])
     @swagger_auto_schema(request_body=serializer)
-    def put(self, request, decay_id):
-        decay = get_object_or_404(Decay, pk=decay_id)
+    def put(self, request):
+        decay = get_object_or_404(Decay, creator = request.user, status = 'draft')
         elements = decay.decay_elements.all()
-        if decay.status == 'draft':
-            if not decay.pass_time is None and decay.pass_time != '':
-                for element in elements:
-                    if element.quantity is None or element.quantity == '':
-                        return Response({'quantity': 'Не может быть пустым'}, status=status.HTTP_400_BAD_REQUEST)
-                decay.status = 'formed'
-                decay.date_of_formation = timezone.now()
-                decay.save()
-                return Response(self.serializer(decay).data, status=status.HTTP_202_ACCEPTED)
-            else:
-                return Response({'pass_time': 'Не может быть пустым'}, status=status.HTTP_400_BAD_REQUEST)
-        else:
-            return Response({'status': 'Должен быть черновик'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    @swagger_auto_schema(request_body=serializer)
-    def delete(self, request, decay_id):
-        decay = get_object_or_404(Decay, pk=decay_id)
-        if decay.status == 'draft':
-            decay.status = 'deleted'
+        if not decay.pass_time is None and decay.pass_time != '':
+            for element in elements:
+                if element.quantity is None or element.quantity == '':
+                    return Response({'quantity': 'Не может быть пустым'}, status=status.HTTP_400_BAD_REQUEST)
+            decay.status = 'formed'
             decay.date_of_formation = timezone.now()
             decay.save()
             return Response(self.serializer(decay).data, status=status.HTTP_202_ACCEPTED)
         else:
-            return Response({'decay': 'Заявка - не черновик'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'pass_time': 'Не может быть пустым'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    @method_permission_classes([IsAuth])
+    @swagger_auto_schema(request_body=serializer)
+    def delete(self, request):
+        decay = get_object_or_404(Decay, creator = request.user, status = 'draft')
+        decay.status = 'deleted'
+        decay.date_of_formation = timezone.now()
+        decay.save()
+        return Response(self.serializer(decay).data, status=status.HTTP_202_ACCEPTED)
 
 class moderateDecay(APIView):
     serializer = DecaySerializer
+    authentication_classes = [AuthBySSID]
 
+    @method_permission_classes([IsManager])
     @swagger_auto_schema(request_body=serializer)
     def put(self, request, decay_id):
         decay = get_object_or_404(Decay, pk=decay_id)
         action = request.data.get('action')
-        if curr_user().is_superuser:
-            if decay.status == 'formed':
-                if action == 'reject':
-                    decay.status = 'rejected'
-                    decay.moderator = curr_user()
-                    decay.date_of_finish = timezone.now()
-                    decay.save()
-                    return Response(self.serializer(decay).data, status=status.HTTP_200_OK)
-                elif action == 'complete':
-                    elements = decay.decay_elements.all()
-                    for element in elements:
-                        try:
-                            element.remaining_quantity = half_life_calculation(decay.pass_time, element.quantity, element.element.period_time)
-                        except NameError:
-                            element.remaining_quantity = 'Неверный формат входных данных'
-                        except ValueError:
-                            element.remaining_quantity = 'Неверный формат единиц измерения'
-                        element.save()
-                    decay.moderator = curr_user()
-                    decay.status = 'completed'
-                    decay.date_of_finish = timezone.now()
-                    decay.save()
-                    return Response(self.serializer(decay).data, status=status.HTTP_202_ACCEPTED)
-                else:
-                    return Response({'action': 'Неверное действие'}, status=status.HTTP_400_BAD_REQUEST)
+        if decay.status == 'formed':
+            if action == 'reject':
+                decay.status = 'rejected'
+                decay.moderator = request.user
+                decay.date_of_finish = timezone.now()
+                decay.save()
+                return Response(self.serializer(decay).data, status=status.HTTP_200_OK)
+            elif action == 'complete':
+                elements = decay.decay_elements.all()
+                for element in elements:
+                    try:
+                        element.remaining_quantity = HalfLifeCalculation.half_life_calculation(decay.pass_time, 
+                                                                                                element.quantity, 
+                                                                                                element.element.period_time)
+                    except NameError:
+                        element.remaining_quantity = 'Неверный формат входных данных'
+                    except ValueError:
+                        element.remaining_quantity = 'Неверный формат единиц измерения'
+                    element.save()
+                decay.moderator = request.user
+                decay.status = 'completed'
+                decay.date_of_finish = timezone.now()
+                decay.save()
+                return Response(self.serializer(decay).data, status=status.HTTP_202_ACCEPTED)
             else:
-                return Response({'status': 'Заявка не сформирована'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'action': 'Неверное действие'}, status=status.HTTP_400_BAD_REQUEST)
         else:
-            return Response({'user': 'Нет доступа!'}, status=status.HTTP_400_BAD_REQUEST)
-
-@swagger_auto_schema(method='post', request_body=UserSerializer)
-@api_view(['post'])
-def userRegistration(request):
-    ser_data = UserSerializer(data=request.data)
-    if ser_data.is_valid():
-        user = get_user_model().objects.create_user(
-            username = ser_data.validated_data.get('username'),
-            password = ser_data.validated_data.get('password'),
-            is_superuser = ser_data.validated_data.get('is_superuser'),
-            is_staff = ser_data.validated_data.get('is_staff'),
-            email = ser_data.validated_data.get('email'),
-            first_name = ser_data.validated_data.get('first_name'),
-            last_name = ser_data.validated_data.get('last_name')
-        )
-        users = get_user_model().objects.all()
-        return Response(UserSerializer(users, many=True).data, status=status.HTTP_201_CREATED)
-    return Response(ser_data.errors, status=status.HTTP_400_BAD_REQUEST)
-
-@swagger_auto_schema(method='put', request_body=UserSerializer)
-@api_view(['put'])
-def userAccount(request, username):
-    user = get_object_or_404(get_user_model(), username=username)
-    ser_data = UserSerializer(user, data=request.data, partial=True)
-    if ser_data.is_valid():
-        ser_data.save()
-        if 'password' in ser_data.validated_data:
-            user.set_password(ser_data.validated_data.get('password'))
-            user.save()
-        return Response(ser_data.data, status=status.HTTP_202_ACCEPTED)
-    return Response(ser_data.errors, status=status.HTTP_400_BAD_REQUEST)
-
-@swagger_auto_schema(method='post', request_body=UserSerializer)
-@api_view(['post'])
-def userAuthentication(request):
-    user = get_object_or_404(get_user_model(), username=request.data.get('username'))
-    if user.check_password(request.data.get('password')):
-        return Response({'user': request.data.get('username'), 'auth': 'Выполнен вход'}, status=status.HTTP_200_OK)
-    return Response({'user': request.data.get('username'), 'auth': 'Неверно введенные данные'}, status=status.HTTP_400_BAD_REQUEST)
-
-@swagger_auto_schema(method='post', request_body=UserSerializer)
-@api_view(['post'])
-def userDeauthentication(request):
-    return Response({'user': request.data.get('username'), 'deauth': 'Выполнен выход'})
+            return Response({'status': 'Заявка не сформирована'}, status=status.HTTP_400_BAD_REQUEST)
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = CustomUser.objects.all()
-    serializer_class = UserSerializer
+    serializer_class = CustomUserSerializer
     model_class = CustomUser
+    authentication_classes = [AuthBySSID]
 
+    def get_permissions(self):
+        if self.action in ['create']:
+            permission_classes = [AllowAny]
+        elif self.action in ['list']:
+            permission_classes = [IsAuth]
+
+        return super().get_permissions()
+    
     def create(self, request):
         if self.model_class.objects.filter(email=request.data['email']).exists():
             return Response({'status': 'Exist'}, status=400)
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
-            print(serializer.data)
             self.model_class.objects.create_user(email=serializer.data['email'],
                                      password=serializer.data['password'],
                                      is_superuser=serializer.data['is_superuser'],
                                      is_staff=serializer.data['is_staff'])
             return Response({'status': 'Success'}, status=200)
         return Response({'status': 'Error', 'error': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+    
+    def list(self, request):
+        return Response(self.serializer_class(request.user).data, status=status.HTTP_200_OK)

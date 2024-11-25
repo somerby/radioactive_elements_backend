@@ -16,7 +16,7 @@ class NewUserManager(UserManager):
 
 class CustomUser(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(("email адрес"), unique=True)
-    password = models.CharField(max_length=50, verbose_name="Пароль")    
+    password = models.CharField(max_length=254, verbose_name="Пароль")    
     is_staff = models.BooleanField(default=False, verbose_name="Является ли пользователь менеджером?")
     is_superuser = models.BooleanField(default=False, verbose_name="Является ли пользователь админом?")
 
@@ -25,14 +25,14 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     objects =  NewUserManager()
     groups = models.ManyToManyField(
         Group,
-        related_name='customuser_groups',  # Unique related_name to avoid clashes
+        related_name='customuser_groups', 
         blank=True,
         verbose_name='Группы'
     )
 
     user_permissions = models.ManyToManyField(
         Permission,
-        related_name='customuser_permissions',  # Unique related_name to avoid clashes
+        related_name='customuser_permissions',
         blank=True,
         verbose_name='Разрешения'
     )

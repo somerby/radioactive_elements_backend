@@ -8,10 +8,12 @@ def deleteImg(url):
             secret_key = 'minio124',
             secure = False
         )
-
-    url_parts = url.split('/')
-    bucket_name = url_parts[-3]
-    img_name = '/'.join(url_parts[-2:])[:-2]
+    try:
+        url_parts = url.split('/')
+        bucket_name = url_parts[-3]
+        img_name = '/'.join(url_parts[-2:])[:-2]
+    except:
+        return 'success'
 
     try:
         client.remove_object(bucket_name, img_name)

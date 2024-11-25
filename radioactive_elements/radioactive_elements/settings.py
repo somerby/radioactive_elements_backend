@@ -52,6 +52,20 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticatedOrReadOnly',
+    ]
+}
+
+AUTH_USER_MODEL = 'radioactive_elements_app.CustomUser'
+
+REDIS_HOST = '127.0.0.1'
+REDIS_PORT = 6379
+
 ROOT_URLCONF = 'radioactive_elements.urls'
 
 TEMPLATES = [

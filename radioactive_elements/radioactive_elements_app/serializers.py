@@ -2,12 +2,24 @@ from .models import *
 from rest_framework import serializers
 from collections import OrderedDict
 
-class UserSerializer(serializers.ModelSerializer):
+class CustomUserSerializer(serializers.ModelSerializer):
     is_staff = serializers.BooleanField(default=False, required=False)
     is_superuser = serializers.BooleanField(default=False, required=False)
     class Meta:
         model = CustomUser
         fields = ['email', 'password', 'is_staff', 'is_superuser']
+
+        def get_fields(self):
+            new_fields = OrderedDict()
+            for name, field in super().get_fields().items():
+                field.required = False
+                new_fields[name] = field
+            return new_fields 
+
+class SwaggerCustomUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fields = ['email', 'password']
 
         def get_fields(self):
             new_fields = OrderedDict()
