@@ -159,8 +159,8 @@ class elementMethods(APIView):
                 element.save()
                 return Response(self.serializer(element).data, status=status.HTTP_204_NO_CONTENT)
             element.save()
-            return Response({'s3_img': 'Удаление не удалось'}, status=status.HTTP_404_NOT_FOUND)
-        return Response({'element': 'Элемент уже удален'}, status=status.HTTP_208_ALREADY_REPORTED)
+            return Response({'error': 'Удаление не удалось'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'error': 'Элемент уже удален'}, status=status.HTTP_208_ALREADY_REPORTED)
 
 @authentication_classes([AuthBySSID])
 @permission_classes([IsManager])
@@ -204,7 +204,7 @@ class decaysMethods(APIView):
     serializer = DecaySerializer
     authentication_classes = [AuthBySSID]
 
-    @method_permission_classes([IsManager])
+    @method_permission_classes([IsAuth])
     @swagger_auto_schema(manual_parameters=[
         openapi.Parameter(
             'start_date',
@@ -236,34 +236,39 @@ class decaysMethods(APIView):
         end_date = request.query_params.get('end_date')
         status_filter = request.query_params.get('status')
 
-        decays = Decay.objects.filter(status__in=acceptable_statuses)
+        decays = Decay.objects.filter(status__in=acceptable_statuses, creator=request.user)
 
-        if start_date and end_date:
+        filter = {}
+        if start_date:
             start_date = parse_date(start_date)
-            end_date = parse_date(end_date)
-            if start_date is None or end_date is None:
+            if start_date is None:
                 return Response({'error': 'Неправильный формат даты'}, status=status.HTTP_400_BAD_REQUEST)
-            decays = decays.filter(date_of_creation__range=(start_date, end_date))
-
+            filter['date_of_creation__gte'] = start_date
+        if end_date:
+            end_date = parse_date(end_date)
+            if end_date is None:
+                return Response({'error': 'Неправильный формат даты'}, status=status.HTTP_400_BAD_REQUEST)
+            filter['date_of_creation__lte'] = end_date
         if status_filter:
             if not status_filter in acceptable_statuses:
                 return Response({'error': 'Неправильный статус'}, status=status.HTTP_400_BAD_REQUEST)
-            decays = decays.filter(status=status_filter)
-        return Response(self.serializer(decays, many=True).data, status=status.HTTP_200_OK)
+            filter['status'] = status_filter
+        
+        return Response(self.serializer(decays.filter(**filter), many = True).data, status=status.HTTP_200_OK)
     
 class decayMethods(APIView):
     serializer = DecaySerializer
     authentication_classes = [AuthBySSID]
 
     @method_permission_classes([IsAuth])
-    def get(self, request):
-        decays = Decay.objects.filter(creator = request.user)
-        return Response(self.serializer(decays, many = True).data, status=status.HTTP_200_OK)
+    def get(self, request, decay_id):
+        decay = get_object_or_404(Decay, creator=request.user, decay_id=decay_id)
+        return Response(self.serializer(decay).data, status=status.HTTP_200_OK)
     
     @method_permission_classes([IsAuth])
     @swagger_auto_schema(request_body=serializer)
-    def put(self, request):
-        decay = get_object_or_404(Decay, creator = request.user, status = 'draft')
+    def put(self, request, decay_id):
+        decay = get_object_or_404(Decay, creator = request.user, decay_id=decay_id)
         changed_decay = self.serializer(decay, data=request.data, partial=True)
         if changed_decay.is_valid():
             changed_decay.save()
@@ -276,8 +281,8 @@ class formingDecay(APIView):
 
     @method_permission_classes([IsAuth])
     @swagger_auto_schema(request_body=serializer)
-    def put(self, request):
-        decay = get_object_or_404(Decay, creator = request.user, status = 'draft')
+    def put(self, request, decay_id):
+        decay = get_object_or_404(Decay, creator = request.user, decay_id=decay_id)
         elements = decay.decay_elements.all()
         if not decay.pass_time is None and decay.pass_time != '':
             for element in elements:
@@ -292,8 +297,8 @@ class formingDecay(APIView):
     
     @method_permission_classes([IsAuth])
     @swagger_auto_schema(request_body=serializer)
-    def delete(self, request):
-        decay = get_object_or_404(Decay, creator = request.user, status = 'draft')
+    def delete(self, request, decay_id):
+        decay = get_object_or_404(Decay, creator = request.user, decay_id=decay_id)
         decay.status = 'deleted'
         decay.date_of_formation = timezone.now()
         decay.save()

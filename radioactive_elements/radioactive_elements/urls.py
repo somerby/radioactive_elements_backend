@@ -46,8 +46,8 @@ urlpatterns = [
     path('api/elements/<int:element_id>/add_img/', views.elementAddImg, name = 'elementAddImg'),
 
     path('api/decays/', views.decaysMethods.as_view(), name = 'decays'),
-    path('api/decay/', views.decayMethods.as_view(), name = 'decay'),
-    path('api/decay/forming/', views.formingDecay.as_view(), name = 'decayForm'),
+    path('api/decay/<int:decay_id>/', views.decayMethods.as_view(), name = 'decay'),
+    path('api/decay/<int:decay_id>/forming/', views.formingDecay.as_view(), name = 'decayForm'),
     path('api/decay/<int:decay_id>/moderate/', views.moderateDecay.as_view(), name = 'decayForm'),
 
     path('api/element_decay/<int:element_id>/<int:decay_id>/', views.elementDecayMethods.as_view(), name='element_decay'),
