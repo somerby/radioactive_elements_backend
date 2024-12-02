@@ -54,6 +54,7 @@ urlpatterns = [
 
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('api/', include(router.urls)),
-    path('login/',  views.login_view, name='login'),
-    path('logout/', views.logout_view, name='logout'),
+    path('api/login/',  views.login_view, name='login'),
+    path('api/logout/', views.logout_view, name='logout'),
+    path('api/account/', views.account_view, name='account')
 ]

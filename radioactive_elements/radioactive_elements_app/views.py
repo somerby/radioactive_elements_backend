@@ -54,7 +54,7 @@ def login_view(request):
         return Response({'status': 'error', 'error': 'login failed'}, status=status.HTTP_403_FORBIDDEN)
 
 @csrf_exempt
-@swagger_auto_schema(method='post')
+@swagger_auto_schema(method='post', request_body=SwaggerCustomUserSerializer)
 @api_view(['post'])
 @authentication_classes([AuthBySSID])
 @permission_classes([IsAuth])
@@ -162,10 +162,12 @@ class elementMethods(APIView):
             return Response({'error': 'Удаление не удалось'}, status=status.HTTP_404_NOT_FOUND)
         return Response({'error': 'Элемент уже удален'}, status=status.HTTP_208_ALREADY_REPORTED)
 
-@authentication_classes([AuthBySSID])
-@permission_classes([IsManager])
+
+@csrf_exempt
 @swagger_auto_schema(method='post', request_body=ElementSerializer)
 @api_view(['post'])
+@authentication_classes([AuthBySSID])
+@permission_classes([IsManager])
 def elementAddImg(request, element_id):
     element = get_object_or_404(Element, element_id=element_id)
     img = request.FILES.get('img')
@@ -236,7 +238,10 @@ class decaysMethods(APIView):
         end_date = request.query_params.get('end_date')
         status_filter = request.query_params.get('status')
 
-        decays = Decay.objects.filter(status__in=acceptable_statuses, creator=request.user)
+        if request.user.is_staff:
+            decays = Decay.objects.all()
+        else:
+            decays = Decay.objects.filter(status__in=acceptable_statuses, creator=request.user)
 
         filter = {}
         if start_date:
@@ -351,7 +356,7 @@ class UserViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['create']:
             permission_classes = [AllowAny]
-        elif self.action in ['list']:
+        else:
             permission_classes = [IsAuth]
 
         return super().get_permissions()
@@ -367,6 +372,14 @@ class UserViewSet(viewsets.ModelViewSet):
                                      is_staff=serializer.data['is_staff'])
             return Response({'status': 'Success'}, status=200)
         return Response({'status': 'Error', 'error': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
-    
-    def list(self, request):
-        return Response(self.serializer_class(request.user).data, status=status.HTTP_200_OK)
+
+@swagger_auto_schema(method='put', request_body=SwaggerCustomUserSerializer)
+@api_view(['put'])
+@authentication_classes([AuthBySSID])
+@permission_classes([IsAuth])
+def account_view(request):
+    changed_user = CustomUserSerializer(request.user, data=request.data, partial=True)
+    if changed_user.is_valid():
+        changed_user.save()
+        return Response(changed_user.data, status=status.HTTP_200_OK)
+    return Response(changed_user.errors, status=status.HTTP_400_BAD_REQUEST)
