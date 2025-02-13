@@ -11,9 +11,9 @@ def deleteImg(url):
     try:
         url_parts = url.split('/')
         bucket_name = url_parts[-3]
-        img_name = '/'.join(url_parts[-2:])[:-2]
+        img_name = '/'.join(url_parts[-2:])
     except:
-        return 'success'
+        return 'error'
 
     try:
         client.remove_object(bucket_name, img_name)

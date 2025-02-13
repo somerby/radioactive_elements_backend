@@ -32,14 +32,18 @@ class ElementSerializer(serializers.ModelSerializer):
     class Meta:
         model = Element
         fields = '__all__'
-        read_only_fields = ['element_id', 'status']
+        read_only_fields = ['element_id']
+        
 
-        def get_fields(self):
-            new_fields = OrderedDict()
-            for name, field in super().get_fields().items():
+    def get_fields(self):
+        new_fields = OrderedDict()
+        for name, field in super().get_fields().items():
+            if name == 'img_url':
                 field.required = False
-                new_fields[name] = field
-            return new_fields 
+            else:
+                field.required = True
+            new_fields[name] = field
+        return new_fields 
 
 class ElementForDecaySerializer(serializers.ModelSerializer):
     class Meta:

@@ -35,9 +35,6 @@ schema_view = get_schema_view(
    permission_classes=(permissions.AllowAny,),
 )
 
-router = routers.DefaultRouter()
-router.register(r'user', views.UserViewSet, basename='user')
-
 urlpatterns = [
     path('admin/', admin.site.urls),
     
@@ -53,8 +50,8 @@ urlpatterns = [
     path('api/element_decay/<int:element_id>/<int:decay_id>/', views.elementDecayMethods.as_view(), name='element_decay'),
 
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
-    path('api/', include(router.urls)),
-    path('api/login/',  views.login_view, name='login'),
-    path('api/logout/', views.logout_view, name='logout'),
-    path('api/account/', views.account_view, name='account')
+    path('api/user/login/',  views.login_view, name='login'),
+    path('api/user/logout/', views.logout_view, name='logout'),
+    path('api/user/account/', views.account_view, name='account'),
+    path('api/user/registration/', views.registration_view, name='registration')
 ]
