@@ -1,5 +1,5 @@
 from django.shortcuts import get_object_or_404
-from django.utils.dateparse import parse_date
+from django.utils.dateparse import parse_datetime
 from django.utils import timezone
 from django.contrib.auth import authenticate, logout
 from django.views.decorators.csrf import csrf_exempt
@@ -14,7 +14,6 @@ from .permissions import IsManager, IsAdmin, AuthBySSID, IsAuth
 from .redis import session_storage
 
 from rest_framework import status
-from rest_framework import viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
@@ -24,7 +23,8 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 
 import uuid
-from django.contrib.auth.hashers import make_password
+
+from .qr_generate import generate_decay_qr
 
 error_schema = openapi.Schema(
     type=openapi.TYPE_OBJECT,
@@ -230,6 +230,11 @@ class elementMethods(APIView):
     @method_permission_classes([AllowAny])
     def get(self, request, element_id):
         element = get_object_or_404(Element, pk=element_id)
+        if element.status == 'deleted':
+            if request.user.is_anonymous:
+                return Response({'details': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+            if not request.user.is_staff:
+                return Response({'details': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
         return Response(self.serializer(element).data, status=status.HTTP_200_OK)
     
     @swagger_auto_schema(responses={
@@ -484,12 +489,12 @@ class decaysMethods(APIView):
 
         filter = {}
         if start_date:
-            start_date = parse_date(start_date)
+            start_date = parse_datetime(start_date)
             if start_date is None:
                 return Response({'details': 'start_date'}, status=status.HTTP_400_BAD_REQUEST)
             filter['date_of_creation__gte'] = start_date
         if end_date:
-            end_date = parse_date(end_date)
+            end_date = parse_datetime(end_date)
             if end_date is None:
                 return Response({'details': 'end_date'}, status=status.HTTP_400_BAD_REQUEST)
             filter['date_of_creation__lte'] = end_date
@@ -521,7 +526,7 @@ class decayMethods(APIView):
     @method_permission_classes([IsAuth])
     def get(self, request, decay_id):
         decay = get_object_or_404(Decay, decay_id=decay_id)
-        if decay.creator != request.user:
+        if decay.creator != request.user and not request.user.is_staff:
             return Response({'details:', 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
         return Response(self.serializer(decay).data, status=status.HTTP_200_OK)
     
@@ -666,6 +671,7 @@ class moderateDecay(APIView):
                 decay.moderator = request.user
                 decay.status = 'completed'
                 decay.date_of_finish = timezone.now()
+                decay.qr = generate_decay_qr(decay)
                 decay.save()
                 return Response(self.serializer(decay).data, status=status.HTTP_202_ACCEPTED)
             else:
@@ -738,15 +744,83 @@ def account_view(request):
         request.user.save()
         authenticate(request, email=request.user.email, password=password)
     return Response(CustomUserSerializer(request.user).data, status=status.HTTP_200_OK)
-    """
-    changed_user = CustomUserSerializer(request.user, data=request.data, partial=True)
-    if changed_user.is_valid():
-        changed_user.save()
-        ssid = request.COOKIES.get('session_id')
-        try:
-            session_storage.set(ssid, request.user.email)
-        except Exception:
-            return Response({'details': 'Session not found'}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(changed_user.data, status=status.HTTP_200_OK)
-    return Response(changed_user.errors, status=status.HTTP_400_BAD_REQUEST)
-    """
+
+class attributeListMethods(APIView):
+    authentication_classes = [AuthBySSID]
+
+    @swagger_auto_schema(request_body=openapi.Schema(type=openapi.TYPE_OBJECT,
+                                                     properties={
+                                                         'name': openapi.Schema(type=openapi.TYPE_STRING),
+                                                         'value': openapi.Schema(type=openapi.TYPE_STRING)
+                                                     },
+                                                     required=['name']),
+                        responses={
+                            200: openapi.Response(
+                                description='Успешное создании атрибута',
+                                schema=AttributeElementSerializer
+                            )
+                        })
+    @method_permission_classes([IsManager])
+    def post(self, request, element_id):
+        attribute_name = request.data.get('name', '')
+        attribute_value = request.data.get('value', '')
+        element = get_object_or_404(Element, pk=element_id)
+        if Attribute.objects.filter(name=attribute_name).exists():
+            attribute = Attribute.objects.get(name=attribute_name)
+        else:
+            attribute = Attribute.objects.create(name=attribute_name)
+        element_attribute, created = Attribute_Element.objects.get_or_create(element=element, attribute=attribute)
+        element_attribute.value = attribute_value
+        element_attribute.save()
+        return Response(AttributeElementSerializer(element_attribute).data, status=status.HTTP_200_OK)
+    
+    @swagger_auto_schema(responses={
+                            200: openapi.Response(
+                                description='Успешное получение атрибутов',
+                                schema=ElementForAttributesSerializer
+                            )
+                        })
+    @method_permission_classes([AllowAny])
+    def get(self, request, element_id):
+        element = get_object_or_404(Element, pk=element_id)
+        return Response(ElementForAttributesSerializer(element).data, status=status.HTTP_200_OK)
+        
+class attributeDetailMethods(APIView):
+    authentication_classes = [AuthBySSID]
+
+    @swagger_auto_schema(responses={
+                            200: openapi.Response(
+                                description='Успешное удаление атрибута',
+                                schema=openapi.Schema(type=openapi.TYPE_OBJECT,
+                                                      properties={
+                                                          'id': openapi.Schema(type=openapi.TYPE_NUMBER)
+                                                      })
+                            ),
+                        })
+    @method_permission_classes([IsManager])
+    def delete(self, request, element_id, attribute_id):
+        element = get_object_or_404(Element, pk=element_id)
+        attribute = get_object_or_404(Attribute, pk=attribute_id)
+        get_object_or_404(Attribute_Element, attribute=attribute, element=element).delete()
+        return Response({'id': attribute.attribute_id}, status=status.HTTP_200_OK)
+    
+    @swagger_auto_schema(request_body=openapi.Schema(type=openapi.TYPE_OBJECT,
+                                                     properties={
+                                                         'value': openapi.Schema(type=openapi.TYPE_STRING)
+                                                     }),
+                        responses={
+                            200: openapi.Response(
+                                description='Успешное создании атрибута',
+                                schema=ok_schema
+                            )
+                        })
+    @method_permission_classes([IsManager])
+    def put(self, request, element_id, attribute_id):
+        element = get_object_or_404(Element, pk=element_id)
+        attribute = get_object_or_404(Attribute, pk=attribute_id)
+        value = request.data.get('value', '')
+        element_attribute = get_object_or_404(Attribute_Element, attribute=attribute, element=element)
+        element_attribute.value = value
+        element_attribute.save()
+        return Response({'status': 'ok'}, status=status.HTTP_200_OK)
+        

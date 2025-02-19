@@ -8,6 +8,8 @@ def deleteImg(url):
             secret_key = 'minio124',
             secure = False
         )
+    if url == '':
+        return 'success'
     try:
         url_parts = url.split('/')
         bucket_name = url_parts[-3]

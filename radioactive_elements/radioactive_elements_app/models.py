@@ -2,6 +2,8 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, UserManager
 from django.contrib.auth.models import Group, Permission
+from django.dispatch import receiver
+from django.db.models.signals import post_save
 
 class NewUserManager(UserManager):
     def create_user(self,email,password=None, **extra_fields):
@@ -69,6 +71,7 @@ class Decay(models.Model):
     date_of_finish = models.DateTimeField(null=True, blank=True)
     pass_time = models.CharField(max_length=30, null=True, blank=True)
     moderator = models.ForeignKey(get_user_model(), on_delete=models.DO_NOTHING, related_name='moderator_decays', null=True, blank=True)
+    qr = models.TextField(null=True)
 
 class Element_Decay(models.Model):
     element = models.ForeignKey(Element, on_delete=models.DO_NOTHING, related_name='element_decays')
@@ -77,3 +80,26 @@ class Element_Decay(models.Model):
     remaining_quantity = models.CharField(max_length=40, null=True, blank=True)
     class Meta:
         unique_together = ('element', 'decay')
+
+class Attribute(models.Model):
+    attribute_id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=30)
+
+class Attribute_Element(models.Model):
+    element = models.ForeignKey(Element, on_delete=models.DO_NOTHING, related_name='element_attributes')
+    attribute = models.ForeignKey(Attribute, on_delete=models.DO_NOTHING, related_name='attribute_elements')
+    value = models.CharField(max_length=70, null=True, blank=True)
+
+@receiver(post_save, sender=Attribute)
+def create_attribute_elements(sender, instance, created, **kwargs):
+    if created:
+        elements = Element.objects.all()
+        for element in elements:
+            Attribute_Element.objects.get_or_create(element=element, attribute=instance)
+
+@receiver(post_save, sender=Element)
+def create_element_attributes(sender, instance, created, **kwargs):
+    if created:
+        attributes = Attribute.objects.all()
+        for attribute in attributes:
+            Attribute_Element.objects.get_or_create(element=instance, attribute=attribute)

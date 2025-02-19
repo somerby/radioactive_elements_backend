@@ -17,7 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 from radioactive_elements_app import views
-from rest_framework import permissions, routers
+from rest_framework import permissions
 from django.urls import path, include
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
@@ -53,5 +53,8 @@ urlpatterns = [
     path('api/user/login/',  views.login_view, name='login'),
     path('api/user/logout/', views.logout_view, name='logout'),
     path('api/user/account/', views.account_view, name='account'),
-    path('api/user/registration/', views.registration_view, name='registration')
+    path('api/user/registration/', views.registration_view, name='registration'),
+
+    path('api/attribute/<int:element_id>/', views.attributeListMethods.as_view(), name='attribute_get_or_create'),
+    path('api/attribute/<int:element_id>/<int:attribute_id>/', views.attributeDetailMethods.as_view(), name='attribute_put_or_delete')
 ]

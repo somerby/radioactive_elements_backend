@@ -2,6 +2,28 @@ from .models import *
 from rest_framework import serializers
 from collections import OrderedDict
 
+class AttributeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Attribute
+        fields = '__all__'
+        read_only_fields = ['attribute_id']
+
+class AttributeElementSerializer(serializers.ModelSerializer):
+    attribute = AttributeSerializer(read_only=True)
+
+    class Meta:
+        model = Attribute_Element
+        fields = ['attribute', 'value']
+        read_only_fields =['attribute']
+
+class ElementForAttributesSerializer(serializers.ModelSerializer):
+    attributes = AttributeElementSerializer(many=True, read_only=True, source='element_attributes')
+
+    class Meta:
+        model = Element
+        fields = ['attributes']
+        read_only_fields = ['attributes']
+
 class CustomUserSerializer(serializers.ModelSerializer):
     is_staff = serializers.BooleanField(default=False, required=False)
     is_superuser = serializers.BooleanField(default=False, required=False)
@@ -81,7 +103,7 @@ class DecaySerializer(serializers.ModelSerializer):
     class Meta:
         model = Decay
         fields = '__all__'
-        read_only_fields = ['decay_id', 'creator', 'moderator', 'status', 'date_of_creation', 'date_of_formation', 'date_of_finish']
+        read_only_fields = ['decay_id', 'creator', 'moderator', 'status', 'date_of_creation', 'date_of_formation', 'date_of_finish', 'qr']
 
         def get_fields(self):
             new_fields = OrderedDict()
